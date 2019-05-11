@@ -27,7 +27,7 @@
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  namespace: "flavio-weblogic"
+  namespace: "weblogic-kubernetes-operator"
   name: "elasticsearch"
   labels:
     app: "elasticsearch"
@@ -57,7 +57,7 @@ spec:
 kind: "Service"
 apiVersion: "v1"
 metadata:
-  namespace: "flavio-weblogic"
+  namespace: "weblogic-kubernetes-operator"
   name: "elasticsearch"
 spec:
   ports:
@@ -76,7 +76,7 @@ spec:
 apiVersion: "apps/v1beta1"
 kind: "Deployment"
 metadata:
-  namespace: "flavio-weblogic"
+  namespace: "weblogic-kubernetes-operator"
   name: "kibana"
   labels:
     app: "kibana"
@@ -100,7 +100,7 @@ spec:
 apiVersion: "v1"
 kind: "Service"
 metadata: 
-  namespace: "flavio-weblogic"
+  namespace: "weblogic-kubernetes-operator"
   name: "kibana"
   labels: 
     app: "kibana"

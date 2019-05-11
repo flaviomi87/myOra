@@ -36,7 +36,7 @@ objects:
         dockerStrategy:
           from:
             kind: ImageStreamTag
-            name: '12213-home-in-image-wdt:12.2.1.3'
+            name: 'store/oracle/weblogic:12.2.1.3'
             ##namespace not parametric, the base images are maintaned by SNAM.
             namespace: creti-weblogic
             noCache: true
@@ -128,7 +128,7 @@ objects:
     spec: {}
 ######################################################################################
   - kind: Domain
-    apiVersion: "weblogic.oracle/v3"
+    apiVersion: "weblogic.oracle/v2"
     metadata:
       name: ${WLS_DOMAIN_NAME}
       namespace: "${PROJECT_EXP}"
@@ -171,7 +171,7 @@ parameters:
     displayName: Source Repository SNAM URL.
     description: The URL of the repository with your application source code for WLS Domain.
     ##value: "---------------------------------GIT REP SIMPLE-DOMAIN"
-    value: "git@172.25.49.136:flavio.creti/snam-suocf.git"
+    value: "git@github.com:flaviomi87/myOra.git"
     required: true
   - name: GIT_BRANCH
     displayName: commit SHA1 tag or branch name
