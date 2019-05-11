@@ -1,0 +1,313 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: weblogic-domain-cluster-flavio
+  annotations:
+    openshift.io/provider-display-name: 'Snam Rete Gas'
+    openshift.io/display-name: "Weblogic Domain managed by the Operator2.1"
+    tags: "weblogic,oracle,snam,middleware"
+    description: >-
+      Create an Oracle WebLogic fully customized domain with a preconfigured cluster build in the image, managed by kubernetes Operator.
+    openshift.io/long-description: >-
+      This template defines resources needed to develop a complete and customized Weblogic Domain,
+      including  build configurations, image streams definition, secrets, routes and statefulset.
+    iconClass: icon-aerogear
+objects:
+  - kind: BuildConfig
+    apiVersion: v1
+    metadata:
+      name: "${{WLS_DOMAIN_BUILD_NAME}}"
+      annotations:
+       template.alpha.openshift.io/wait-for-ready: "true"
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: '${WLS_DOMAIN_NAME}_image:12.2.1.3'
+      source:
+        type: Git
+        git:
+          uri: "${WLS_GIT_URI}"
+          ref: "${GIT_BRANCH}"
+        contextDir: "${WLS_GIT_CONTEXT}"
+        sourceSecret:
+          name: "mysshkey"
+      strategy:
+        dockerStrategy:
+          from:
+            kind: ImageStreamTag
+            name: '12213-home-in-image-wdt:12.2.1.3'
+            ##namespace not parametric, the base images are maintaned by SNAM.
+            namespace: creti-weblogic
+            noCache: true
+          buildArgs:
+            - name: WDT_MODEL
+              value: "${WLS_TOPOLOGY}"
+            - name: WDT_VARIABLE
+              value: "${WLS_WDT_VARIABLE}"
+            - name: WDT_ARCHIVE
+              value: "${WLS_ARCHIVE}"
+            - name: REPLICA_NUMBER
+              value: "${WLS_REPLICA_NUMBER}"
+            - name: DOMAIN_NAME
+              value: "${WLS_DOMAIN_NAME}"
+            - name: "JNDI_NAME_1"
+              value: "${WLS_JNDINAME_1}"
+            - name: "DB1_URL"
+              value: "${WLS_DB1_URL}"
+            - name: "DB1_PASS"
+              value: "${WLS_DB1_PASS}"
+            - name: "DB1_USER"
+              value: "${WLS_DB1_USER}"
+            - name: "DB1_CONN_TIMEOUT"
+              value: "${WLS_DB1_CONN_TIMEOUT}"
+            - name: "DB1_MAX_CAPACITY"
+              value: "${WLS_DB1_MAX_CAPACITY}"
+            - name: "JNDI_NAME_2"
+              value: "${WLS_JNDINAME_2}"
+            - name: "DB2_URL"
+              value: "${WLS_DB2_URL}"
+            - name: "DB2_PASS"
+              value: "${WLS_DB2_PASS}"
+            - name: "DB2_USER"
+              value: "${WLS_DB2_USER}"
+            - name: "DB2_CONN_TIMEOUT"
+              value: "${WLS_DB2_CONN_TIMEOUT}"
+            - name: "DB2_MAX_CAPACITY"
+              value: "${WLS_DB2_MAX_CAPACITY}"
+            - name: "JNDI_NAME_3"
+              value: "${WLS_JNDINAME_3}"
+            - name: "DB3_URL"
+              value: "${WLS_DB3_URL}"
+            - name: "DB3_PASS"
+              value: "${WLS_DB3_PASS}"
+            - name: "DB3_USER"
+              value: "${WLS_DB3_USER}"
+            - name: "DB3_CONN_TIMEOUT"
+              value: "${WLS_DB3_CONN_TIMEOUT}"
+            - name: "DB3_MAX_CAPACITY"
+              value: "${WLS_DB3_MAX_CAPACITY}"
+    #Env will take the metadata.namespace for the pod that will BUILD the image, it means POD MUST be in the project and image cannot be push-pulled between environment
+          env:
+            - name: PROJECT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+        type: Docker
+      triggers:
+      - type: ConfigChange
+      - type: ImageChange
+        imageChange: {}
+
+#########################################################################################################################################
+  - kind: Secret
+    apiVersion: v1
+    data:
+     username: weblogic
+     password: welcome1
+    metadata:
+     name: ${WLS_DOMAIN_NAME}-weblogic-credentials
+     namespace: "${PROJECT_EXP}"
+    labels:
+     weblogic.domainName: ${WLS_DOMAIN_NAME}
+     weblogic.domainUID: ${WLS_DOMAIN_NAME}
+    type: Opaque
+  - kind: Route
+    apiVersion: v1
+    metadata:
+      name: ${WLS_DOMAIN_NAME}-admin-server-external
+    spec:
+      path: "/console"
+      to:
+        kind: Service
+        name: ${WLS_DOMAIN_NAME}-admin-server-external
+  - kind: ImageStream
+    apiVersion: v1
+    metadata:
+      name: ${WLS_DOMAIN_NAME}_image
+    spec: {}
+######################################################################################
+  - kind: Domain
+    apiVersion: "weblogic.oracle/v3"
+    metadata:
+      name: ${WLS_DOMAIN_NAME}
+      namespace: "${PROJECT_EXP}"
+    labels:
+      weblogic.resourceVersion: domain-v2
+      weblogic.domainUID: ${WLS_DOMAIN_NAME}
+    spec:
+      domainHome: /u01/oracle/user_projects/domains/${WLS_DOMAIN_NAME}
+      domainHomeInImage: true
+      image: "${WLS_DOMAIN_NAME}_image:12.2.1.3"
+      imagePullPolicy: "IfNotPresent"
+    webLogicCredentialsSecret:
+      name: ${WLS_DOMAIN_NAME}-weblogic-credentials
+    includeServerOutInPodLog: true
+    serverStartPolicy: "IF_NEEDED"
+    serverPod:
+      env:
+        - name: JAVA_OPTIONS
+          value: "-Dweblogic.StdoutDebugEnabled=false"
+        - name: USER_MEM_ARGS
+          value: "-Xms64m -Xmx256m "
+    adminServer:
+      serverStartState: "RUNNING"
+      adminService:
+         channels:
+           - channelName: default
+             nodePort: 30701
+    clusters:
+        - clusterName: cluster-1
+          serverStartState: "RUNNING"
+          replicas: "${WLS_REPLICA_NUMBER}"
+
+parameters:
+  - name: PROJECT_EXP
+    displayName: Project name
+    description: Insert the project name as extracted from oc project. EG weblogic-test.
+    value: "creti-weblogic"
+    required: true
+  - name: WLS_GIT_URI
+    displayName: Source Repository SNAM URL.
+    description: The URL of the repository with your application source code for WLS Domain.
+    ##value: "---------------------------------GIT REP SIMPLE-DOMAIN"
+    value: "git@172.25.49.136:flavio.creti/snam-suocf.git"
+    required: true
+  - name: GIT_BRANCH
+    displayName: commit SHA1 tag or branch name
+    description: Default is master.
+    value: "master"
+    required: true
+  ## default is the Dockerfile in the root
+  - name: WLS_GIT_CONTEXT
+    displayName: Git context - WLS
+    description: The Context for GIT.
+    value: "snam-domain1"
+    required: true
+  - name: WLS_REPLICA_NUMBER
+    displayName: Managed servers to initally start (MIN NUMBER OF MS).
+    description: The number of the initial managed servers started inside the cluster - Default=2.
+    value: "2"
+    required: true
+  - name: WLS_DOMAIN_BUILD_NAME
+    displayName: WLS Domain build name
+    description: The name of WLS Domain Build
+    generate: expression
+    from: "wls-domain-build"
+  - name: KAPP
+    displayName: KAPP
+    description: Kapp for the application. Used for labelling purpose.
+    value: "123-kapp-autogenerated"
+    required: true
+  - name: WLS_WDT_VARIABLE
+    displayName: domain.properties
+    description: File contenente le properties del dominio, presente sul repository; modificare nel caso abbiate generato un proprties ad-hoc
+    value: "properties/docker-build/domain.properties"
+    required: true
+  - name: WLS_TOPOLOGY
+    displayName: topology
+    description: File contenente le coonfigurazioni del dominio, presente su repository; per effettuare modifiche, vedi documentazione topology.md
+    value: "topology.yaml"
+    required: true
+  - name: WLS_ARCHIVE
+    displayName: archive.zip
+    description: Applicazione in formato *.zip; per generare l'applicazione secondo le specifiche Oracle, eseguire lo script build-archive.sh presente su repository
+    value: "archive.zip"
+    required: true
+  - name: WLS_DOMAIN_NAME
+    displayName: domain_name
+    description: Nome del dominio da creare
+    value: "domain1"
+    required: true
+  - name: WLS_JNDINAME_1
+    displayName: jdbc/generic
+    description: Nome del Datasource; inserire solo il nome custom del JNDI, senza specificare la folder jdbc/
+    value: "jdbcGenerico1"
+    required: true
+  - name: WLS_DB1_URL
+    displayName: jdbc:oracle:thin:@//DatabaseUrl:PORT
+    description: Url del Datasource; inserire l'url del DB a cui è necessario che il Datasource si colleghi
+    value: "DatabaseUrl.snamretegas.priv:PORT"
+    required: true
+  - name: WLS_DB1_PASS
+    displayName: Password01
+    description: Password
+    value: "Password01"
+    required: true
+  - name: WLS_DB1_USER
+    displayName: User
+    description: Nome Utente
+    value: "DBUser"
+    required: true
+  - name: WLS_DB1_CONN_TIMEOUT
+    displayName: "5000"
+    description: Connection Timeout, es. 5000
+    value: "5000"
+    required: true
+  - name: WLS_DB1_MAX_CAPACITY
+    displayName: "50"
+    description: Capacità massima, es. 50
+    value: "50"
+    required: true
+  - name: WLS_JNDINAME_2
+    displayName: jdbc/generic
+    description: Nome del Datasource; inserire solo il nome custom del JNDI, senza specificare la folder jdbc/
+    value: "jdbcGenerico2"
+    required: true
+  - name: WLS_DB2_URL
+    displayName: jdbc:oracle:thin:@//DatabaseUrl:PORT
+    description: Url del Datasource; inserire l'url del DB a cui è necessario che il Datasource si colleghi
+    value: "DatabaseUrl.snamretegas.priv:PORT"
+    required: true
+  - name: WLS_DB2_PASS
+    displayName: Password01
+    description: Password
+    value: "Password01"
+    required: true
+  - name: WLS_DB2_USER
+    displayName: User
+    description: Nome Utente
+    value: "DBUser"
+    required: true
+  - name: WLS_DB2_CONN_TIMEOUT
+    displayName: "5000"
+    description: Connection Timeout, es. 5000
+    value: "5000"
+    required: true
+  - name: WLS_DB2_MAX_CAPACITY
+    displayName: "50"
+    description: Capacità massima, es. 50
+    value: "50"
+    required: true
+  - name: WLS_JNDINAME_3
+    displayName: jdbc/generic
+    description: Nome del Datasource; inserire solo il nome custom del JNDI, senza specificare la folder jdbc/
+    value: "jdbcGenerico3"
+    required: true
+  - name: WLS_DB3_URL
+    displayName: jdbc:oracle:thin:@//DatabaseUrl:PORT
+    description: Url del Datasource; inserire l'url del DB a cui è necessario che il Datasource si colleghi
+    value: "DatabaseUrl.snamretegas.priv:PORT"
+    required: true
+  - name: WLS_DB3_PASS
+    displayName: Password01
+    description: Password
+    value: "Password01"
+    required: true
+  - name: WLS_DB3_USER
+    displayName: User
+    description: Nome Utente
+    value: "DBUser"
+    required: true
+  - name: WLS_DB3_CONN_TIMEOUT
+    displayName: "5000"
+    description: Connection Timeout, es. 5000
+    value: "5000"
+    required: true
+  - name: WLS_DB3_MAX_CAPACITY
+    displayName: "50"
+    description: Capacità massima, es. 50
+    value: "50"
+    required: true
+
+message: "The Operator will manage Weblogic Domain generation... Good Luck!!"
