@@ -1,7 +1,7 @@
 In order to admit arbitrary execution of docker images in Openshift, we need to relax the permissions for EVERY project we want to allow it.
 After login in oc console (use the OOTB login command provided with OCPConsole) just use the command described in  Automation/OC_Service-Account
 
-# SNAM OpenShift
+# SAMPLE OpenShift
 This repository contains DockerFiles, scripts and BINARY (to be moved in an external repository) to build and distribute images for PAAS Project.
 
 ## Current product available
